@@ -526,16 +526,16 @@
 (function(){
   "use strict";
 
-  /* ---------- storage helpers ---------- */
-  async function getKey(key, fallback){
+  /* ---------- storage helpers (plain localStorage — works on any host) ---------- */
+  function getKey(key, fallback){
     try{
-      const r = await window.storage.get(key, false);
-      if(!r) return fallback;
-      return JSON.parse(r.value);
+      const raw = window.localStorage.getItem('flightdeck:' + key);
+      if(raw === null) return fallback;
+      return JSON.parse(raw);
     }catch(e){ return fallback; }
   }
-  async function setKey(key, value){
-    try{ await window.storage.set(key, JSON.stringify(value), false); }
+  function setKey(key, value){
+    try{ window.localStorage.setItem('flightdeck:' + key, JSON.stringify(value)); }
     catch(e){ console.error('storage set failed', key, e); }
   }
 
@@ -1176,7 +1176,7 @@
       '<div class="card-title">'+esc(icao)+' <a href="https://chartfox.org/'+encodeURIComponent(icao)+'" target="_blank" rel="noopener" class="btn small" style="text-decoration:none;">Open charts ↗</a></div>'+
       '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">Weather</div>'+
       metarHtml+
-      '<div style="font-size:11px;color:var(--text-muted);margin:14px 0 7px 0;">ATIS</div>'+
+      '<div style="font-size:11px;color:var(--text-muted);margin:14px 0 8px 0;">ATIS</div>'+
       atisHtml+
       '<div style="font-size:11px;color:var(--text-muted);margin:14px 0 8px 0;">Online ATC</div>'+
       atcHtml+
