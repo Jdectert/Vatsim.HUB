@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flight Deck — Personal VATSIM Hub</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
+<style>
+  :root{
+    --bg:#F1F2F4;
+    --card:#FFFFFF;
+    --border:#DCDEE2;
+    --border-strong:#C6C9CE;
+    --navy:#0B2D53;
+    --navy-soft:#264A73;
+    --blue:#0A7CFF;
+    --blue-dark:#0562CC;
+    --blue-tint:#E6F2FF;
+    --green:#2FA84F;
+    --green-tint:#E6F7EA;
+    --amber:#C8720A;
+    --amber-tint:#FCEEDC;
+    --red:#D6392E;
+    --red-tint:#FBEAE8;
+    --text:#1C1E21;
+    --text-secondary:#6B7076;
+    --text-faint:#9DA1A7;
+    --font-ui:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--font-ui);
+    font-size:15px;
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  .app{
+    display:flex;
+    flex-direction:column;
+    min-height:100vh;
+  }
+
+  /* ---- Top nav bar ---- */
+  .topbar{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    padding:12px 16px;
+    background:rgba(247,248,250,0.94);
+    backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--border);
+    flex-wrap:wrap;
+    position:sticky;
+    top:0;
+    z-index:10;
+  }
+  .brand{
+    font-weight:700;
+    font-size:19px;
+    letter-spacing:-0.2px;
+    color:var(--navy);
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .brand .tag{
+    font-size:11px;
+    font-weight:600;
+    color:var(--blue);
+    background:var(--blue-tint);
+    padding:3px 8px;
+    border-radius:20px;
+    letter-spacing:0.2px;
+  }
+  .status-pill{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-size:12.5px;
+    font-weight:600;
+    padding:5px 12px;
+    border-radius:20px;
+    background:#EAEBED;
+    color:var(--text-secondary);
+  }
+  .status-dot{width:7px;height:7px;border-radius:50%;background:var(--text-faint);}
+  .status-pill.online{background:var(--green-tint);color:var(--green);}
+  .status-pill.online .status-dot{background:var(--green);}
+  .status-pill.offline{background:#EAEBED;color:var(--text-secondary);}
+  .zulu{
+    margin-left:auto;
+    color:var(--navy-soft);
+    font-size:13px;
+    font-weight:600;
+    font-variant-numeric:tabular-nums;
+  }
+
+  /* ---- content ---- */
+  main{
+    flex:1;
+    padding:18px 16px 104px 16px;
+    overflow-y:auto;
+  }
+  .panel{display:none;max-width:900px;margin:0 auto;}
+  .panel.active{display:block;}
+  h2{
+    font-weight:700;
+    font-size:26px;
+    letter-spacing:-0.3px;
+    margin:6px 0 3px 0;
+    color:var(--navy);
+  }
+  .subhead{
+    color:var(--text-secondary);
+    font-size:13px;
+    margin-bottom:18px;
+  }
+  .card{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:16px 16px;
+    margin-bottom:14px;
+    box-shadow:0 1px 2px rgba(16,24,40,0.04);
+  }
+  .card-title{
+    font-weight:700;
+    font-size:13px;
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+    color:var(--text-secondary);
+    margin:0 0 12px 0;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+  }
+  .row{display:flex;gap:12px;flex-wrap:wrap;}
+  .col{flex:1;min-width:150px;}
+  label{
+    display:block;
+    font-size:12px;
+    font-weight:600;
+    color:var(--text-secondary);
+    margin-bottom:5px;
+  }
+  input,select,textarea{
+    background:#F7F8F9;
+    border:1px solid var(--border);
+    color:var(--text);
+    font-family:var(--font-ui);
+    font-size:15px;
+    padding:9px 11px;
+    border-radius:8px;
+    width:100%;
+  }
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--blue);background:#fff;box-shadow:0 0 0 3px var(--blue-tint);}
+  textarea{resize:vertical;min-height:50px;}
+  button.btn{
+    background:var(--blue);
+    border:1px solid var(--blue);
+    color:#fff;
+    font-family:var(--font-ui);
+    font-weight:600;
+    font-size:14.5px;
+    padding:9px 16px;
+    border-radius:9px;
+    cursor:pointer;
+    letter-spacing:0.1px;
+  }
+  button.btn:hover{background:var(--blue-dark);border-color:var(--blue-dark);}
+  button.btn.primary{background:var(--blue);border-color:var(--blue);color:#fff;}
+  button.btn.warn{background:var(--amber-tint);border-color:var(--amber-tint);color:var(--amber);}
+  button.btn.warn:hover{background:#F7DFC0;border-color:#F7DFC0;}
+  button.btn.danger{background:var(--red-tint);border-color:var(--red-tint);color:var(--red);}
+  button.btn.danger:hover{background:#F6D6D3;}
+  button.btn.small{padding:5px 12px;font-size:13px;border-radius:7px;}
+  button.btn:not(.primary):not(.warn):not(.danger){background:var(--card);border:1px solid var(--border-strong);color:var(--blue);}
+  button.btn:not(.primary):not(.warn):not(.danger):hover{background:#F5F6F7;}
+  .btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+
+  .readout{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(110px,1fr));
+    gap:10px;
+  }
+  .readout div{
+    background:#F7F8F9;
+    border:1px solid var(--border);
+    border-radius:9px;
+    padding:10px 12px;
+  }
+  .readout .val{font-size:19px;color:var(--navy);font-weight:700;font-variant-numeric:tabular-nums;}
+  .readout .lbl{font-size:10.5px;color:var(--text-secondary);margin-top:2px;font-weight:600;}
+
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  th{
+    text-align:left;
+    font-weight:700;
+    color:var(--text-secondary);
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.4px;
+    padding:6px 8px;
+    border-bottom:1px solid var(--border);
+  }
+  td{padding:8px 8px;border-bottom:1px solid var(--border);color:var(--text);}
+  tr:hover td{background:#F7F8F9;}
+  .empty{color:var(--text-faint);font-size:13px;padding:14px 0;text-align:center;}
+
+  .chart-wrap svg{width:100%;height:120px;display:block;}
+  .chart-wrap .bar-label{font-size:9.5px;fill:var(--text-secondary);font-family:var(--font-ui);}
+  .chart-wrap .bar-val{font-size:10.5px;fill:var(--navy);font-family:var(--font-ui);font-weight:700;}
+
+  .metar-raw{
+    font-family:var(--font-mono);
+    background:#F7F8F9;
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:10px 12px;
+    font-size:12.5px;
+    color:var(--navy);
+    word-break:break-all;
+    margin-bottom:10px;
+  }
+  .msg{font-size:12.5px;color:var(--text-secondary);margin-top:6px;}
+  .msg.error{color:var(--red);}
+  .msg.ok{color:var(--green);}
+  .saved-flash{color:var(--green);font-size:12.5px;margin-left:8px;opacity:0;transition:opacity .2s;font-weight:600;}
+  .saved-flash.show{opacity:1;}
+
+  /* ---- checklist / kneeboard ---- */
+  .card.kb-editor{
+    background:var(--bg);
+    border-color:var(--border-strong);
+    box-shadow:none;
+  }
+  .kb-section{
+    border:1px solid var(--border-strong);
+    border-radius:10px;
+    margin-bottom:14px;
+    background:var(--card);
+    overflow:hidden;
+    box-shadow:0 1px 3px rgba(16,24,40,0.06);
+  }
+  .kb-section-head{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:10px 12px;
+    background:var(--blue-tint);
+    border-bottom:1px solid var(--border-strong);
+    cursor:grab;
+  }
+  .kb-section-head .drag-handle{color:var(--navy-soft);font-size:14px;cursor:grab;padding:0 2px;}
+  .kb-section-head input{
+    font-weight:700;
+    font-size:14.5px;
+    color:var(--navy);
+    border:none;
+    background:none;
+    padding:2px 0;
+    flex:1;
+  }
+  .kb-items{min-height:8px;padding:2px 0;}
+  .kb-item{
+    display:flex;
+    align-items:center;
+    gap:9px;
+    padding:10px 12px;
+    border-bottom:1px solid var(--border);
+    background:var(--card);
+  }
+  .kb-item:last-child{border-bottom:none;}
+  .kb-item.checked{background:var(--green-tint);}
+  .kb-item .drag-handle{color:var(--text-faint);cursor:grab;font-size:14px;padding:0 2px;user-select:none;}
+  .kb-item input[type=checkbox]{width:19px;height:19px;flex-shrink:0;accent-color:var(--green);}
+  .kb-item input[type=text]{
+    flex:1;background:none;border:none;padding:2px 0;font-size:14.5px;
+  }
+  .kb-item.checked input[type=text]{color:var(--green);text-decoration:line-through;text-decoration-color:rgba(47,168,79,0.4);}
+  .kb-item .icon-btn{opacity:0.55;}
+  .kb-add-item{
+    display:flex;align-items:center;gap:8px;padding:9px 12px 11px 36px;background:#FAFBFC;
+  }
+  .icon-btn{
+    background:none;border:none;color:var(--text-faint);cursor:pointer;font-size:16px;padding:2px 6px;
+  }
+  .icon-btn:hover{color:var(--red);}
+  .sortable-ghost{opacity:0.3;}
+  .sortable-drag .kb-section-head{cursor:grabbing;}
+
+  /* ---- route strip (ForeFlight-style flight plan bar) ---- */
+  .route-strip{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:14px;
+    background:linear-gradient(135deg,var(--navy),var(--navy-soft));
+    color:#fff;
+    border-radius:12px;
+    padding:16px 18px;
+    margin-bottom:14px;
+    font-weight:700;
+    font-size:22px;
+    letter-spacing:0.5px;
+  }
+  .route-strip .rs-icon{font-size:17px;color:#9FC6F5;}
+  .route-strip .rs-empty{font-size:14px;font-weight:500;color:#CFE0F2;letter-spacing:0;}
+
+  @media print{
+    .topbar,.bottom-nav,#tab-live,#tab-logbook,#tab-route,.no-print{display:none !important;}
+    body{background:#fff;color:#000;}
+    main{padding:0;}
+    .panel{display:none !important;}
+    #print-area{display:block !important;}
+  }
+  #print-area{display:none;}
+
+  /* ---- bottom nav ---- */
+  .bottom-nav{
+    position:fixed;
+    bottom:0;left:0;right:0;
+    display:flex;
+    background:rgba(250,250,251,0.96);
+    backdrop-filter:blur(10px);
+    border-top:1px solid var(--border);
+    z-index:20;
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  .bottom-nav button{
+    flex:1;
+    background:none;
+    border:none;
+    color:var(--text-faint);
+    font-family:var(--font-ui);
+    font-weight:600;
+    font-size:11px;
+    padding:8px 4px 10px 4px;
+    cursor:pointer;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:3px;
+    letter-spacing:0.1px;
+  }
+  .bottom-nav button .ic{font-size:20px;line-height:1;}
+  .bottom-nav button.active{color:var(--blue);}
+
+  @media (max-width:720px){
+    main{padding:14px 12px 100px 12px;}
+    .brand .tag{display:none;}
+    .route-strip{font-size:18px;}
+  }
+</style>
+
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <div class="brand">Flight Deck <span class="tag">VATSIM</span></div>
+    <div id="live-status-pill" class="status-pill offline">
+      <div class="status-dot"></div>
+      <span id="live-status-text">Not checked</span>
+    </div>
+    <div class="zulu" id="zulu-clock">--:--:--Z</div>
+  </div>
+
+  <main>
+
+    <!-- LIVE TAB -->
+    <section class="panel active" id="tab-live">
+      <h2>Live network status</h2>
+      <div class="subhead">Checks the public VATSIM data feed for your session.</div>
+
+      <div class="card">
+        <div class="card-title">Your VATSIM CID</div>
+        <div class="row" style="align-items:flex-end;">
+          <div class="col">
+            <label>CID</label>
+            <input type="text" id="cid-input" placeholder="e.g. 1234567" autocomplete="off">
+          </div>
+          <div class="col" style="flex:0 0 auto;">
+            <button class="btn primary" id="btn-save-cid">Save CID</button>
+            <span class="saved-flash" id="cid-saved-flash">Saved ✓</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Your connection</div>
+        <div id="live-body">
+          <div class="empty">Save your CID above, then check status.</div>
+        </div>
+        <div class="btn-row">
+          <button class="btn primary" id="btn-refresh-live">Check status</button>
+          <button class="btn warn" id="btn-start-session" style="display:none;">Start logging this session</button>
+          <button class="btn danger" id="btn-end-session" style="display:none;">End & log session</button>
+        </div>
+        <div class="msg" id="live-msg"></div>
+      </div>
+
+      <div class="card" id="active-session-card" style="display:none;">
+        <div class="card-title">Session in progress</div>
+        <div class="readout" id="active-session-readout"></div>
+      </div>
+    </section>
+
+    <!-- LOGBOOK TAB -->
+    <section class="panel" id="tab-logbook">
+      <h2>Logbook</h2>
+      <div class="subhead">Every entry lives only in this browser — logged from live sessions or entered by hand.</div>
+
+      <div class="card">
+        <div class="card-title">Totals</div>
+        <div class="readout" id="logbook-totals"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Hours by month</div>
+        <div class="chart-wrap" id="logbook-chart"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Add entry manually</div>
+        <div class="row">
+          <div class="col"><label>Date</label><input type="date" id="lb-date"></div>
+          <div class="col"><label>Callsign</label><input type="text" id="lb-callsign" placeholder="N123AB"></div>
+          <div class="col"><label>Aircraft</label><input type="text" id="lb-aircraft" placeholder="C172"></div>
+        </div>
+        <div class="row" style="margin-top:10px;">
+          <div class="col"><label>Departure (ICAO)</label><input type="text" id="lb-dep" placeholder="KJFK" maxlength="4"></div>
+          <div class="col"><label>Arrival (ICAO)</label><input type="text" id="lb-arr" placeholder="KBOS" maxlength="4"></div>
+          <div class="col"><label>Duration (hrs)</label><input type="number" step="0.1" id="lb-dur" placeholder="1.2"></div>
+        </div>
+        <div class="row" style="margin-top:10px;">
+          <div class="col" style="flex:2;"><label>Notes</label><input type="text" id="lb-notes" placeholder="Radio work, first solo pattern, etc."></div>
+        </div>
+        <div class="btn-row">
+          <button class="btn primary" id="btn-add-entry">Save entry</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Flights</div>
+        <div id="logbook-table"></div>
+      </div>
+    </section>
+
+    <!-- KNEEBOARD TAB -->
+    <section class="panel" id="tab-kneeboard">
+      <h2>Kneeboard checklist</h2>
+      <div class="subhead">A working checklist — check items off in flight, drag to reorder, edit anytime.</div>
+
+      <div class="card no-print">
+        <div class="row" style="align-items:flex-end;">
+          <div class="col">
+            <label>Checklist</label>
+            <select id="kb-template-select"></select>
+          </div>
+          <div class="col" style="flex:0 0 auto;">
+            <button class="btn small" id="btn-kb-new">New</button>
+            <button class="btn small danger" id="btn-kb-delete">Delete</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card kb-editor no-print">
+        <div class="row" style="align-items:flex-end;">
+          <div class="col">
+            <label>Checklist name</label>
+            <input type="text" id="kb-name">
+          </div>
+          <div class="col" style="flex:0 0 auto;">
+            <button class="btn small" id="btn-kb-add-section">+ Section</button>
+          </div>
+        </div>
+        <div id="kb-sections" style="margin-top:14px;"></div>
+        <div class="btn-row">
+          <button class="btn warn" id="btn-kb-reset">Reset checks</button>
+          <button class="btn" id="btn-kb-print">Print / export</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ROUTE TAB -->
+    <section class="panel" id="tab-route">
+      <h2>Route resources</h2>
+      <div class="subhead">Weather, live ATC frequencies & ATIS, and charts for your departure and arrival.</div>
+
+      <div class="route-strip" id="route-strip">
+        <span class="rs-empty">No route loaded yet</span>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Current route</div>
+        <div id="route-auto-msg" class="msg"></div>
+        <div class="row" style="align-items:flex-end;">
+          <div class="col"><label>Departure (ICAO)</label><input type="text" id="rt-dep" maxlength="4" placeholder="KJFK"></div>
+          <div class="col"><label>Arrival (ICAO)</label><input type="text" id="rt-arr" maxlength="4" placeholder="KBOS"></div>
+          <div class="col" style="flex:0 0 auto;"><button class="btn primary" id="btn-rt-load">Load route</button></div>
+        </div>
+      </div>
+
+      <div id="route-results"></div>
+    </section>
+    
+
+  </main>
+
+  <div class="bottom-nav">
+    <button class="tab-btn active" data-tab="live"><span class="ic">◎</span>Live</button>
+    <button class="tab-btn" data-tab="logbook"><span class="ic">▤</span>Logbook</button>
+    <button class="tab-btn" data-tab="kneeboard"><span class="ic">☑</span>Kneeboard</button>
+    <button class="tab-btn" data-tab="route"><span class="ic">✈</span>Route</button>
+  </div>
+</div>
+
+<div id="print-area"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- storage helpers ---------- */
+  async function getKey(key, fallback){
+    try{
+      const r = await window.storage.get(key, false);
+      if(!r) return fallback;
+      return JSON.parse(r.value);
+    }catch(e){ return fallback; }
+  }
+  async function setKey(key, value){
+    try{ await window.storage.set(key, JSON.stringify(value), false); }
+    catch(e){ console.error('storage set failed', key, e); }
+  }
+
+  /* ---------- state ---------- */
+  let state = {
+    cid: '',
+    logbook: [],
+    activeSession: null,
+    kneeboards: [],
+    activeKneeboardId: null
+  };
+
+  let idCounter = 1;
+  function newId(prefix){ return prefix + '_' + (Date.now().toString(36)) + '_' + (idCounter++); }
+
+  const DEFAULT_KNEEBOARD = {
+    id: 'default',
+    name: 'Before Takeoff',
+    sections: [
+      {id:newId('sec'), title:'Before Start', items:[
+        {id:newId('it'), text:'Preflight inspection complete', checked:false},
+        {id:newId('it'), text:'Seat / belts / mixture / mags / master', checked:false},
+        {id:newId('it'), text:'ATIS / airport info obtained', checked:false}
+      ]},
+      {id:newId('sec'), title:'Before Takeoff', items:[
+        {id:newId('it'), text:'Flight controls free & correct', checked:false},
+        {id:newId('it'), text:'Instruments / avionics set', checked:false},
+        {id:newId('it'), text:'Runway & wind checked, transponder ALT', checked:false}
+      ]},
+      {id:newId('sec'), title:'Before Landing', items:[
+        {id:newId('it'), text:'Fuel selector / mixture set', checked:false},
+        {id:newId('it'), text:'Seatbelts secure', checked:false},
+        {id:newId('it'), text:'Landing checklist complete', checked:false}
+      ]}
+    ]
+  };
+
+  let vatsimFeedCache = null;
+  let vatsimFeedFetchedAt = 0;
+
+  /* Neither data.vatsim.net nor aviationweather.gov send CORS headers, so a
+     direct browser fetch is blocked. Try direct first (in case that ever
+     changes), then fall back through a couple of public CORS relays —
+     the VATSIM feed is large, so a single relay can occasionally time out. */
+  async function corsFetch(url){
+    const attempts = [
+      () => fetch(url),
+      () => fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(url)),
+      () => fetch('https://corsproxy.io/?url=' + encodeURIComponent(url))
+    ];
+    let lastErr = null;
+    for(const attempt of attempts){
+      try{
+        const res = await attempt();
+        if(res.ok) return res;
+        lastErr = new Error('status ' + res.status);
+      }catch(e){ lastErr = e; }
+    }
+    throw lastErr || new Error('all fetch attempts failed');
+  }
+
+  async function getVatsimFeed(force){
+    if(!force && vatsimFeedCache && (Date.now() - vatsimFeedFetchedAt) < 15000){
+      return vatsimFeedCache;
+    }
+    const res = await corsFetch('https://data.vatsim.net/v3/vatsim-data.json');
+    const data = await res.json();
+    vatsimFeedCache = data;
+    vatsimFeedFetchedAt = Date.now();
+    return data;
+  }
+
+  /* ---------- init ---------- */
+  async function init(){
+    state.cid = await getKey('settings-cid', '');
+    state.logbook = await getKey('logbook-entries', []);
+    state.activeSession = await getKey('active-session', null);
+    state.kneeboards = await getKey('kneeboard-templates-v2', [DEFAULT_KNEEBOARD]);
+    state.activeKneeboardId = state.kneeboards[0] ? state.kneeboards[0].id : null;
+
+    document.getElementById('cid-input').value = state.cid;
+
+    renderLive();
+    renderLogbook();
+    renderKneeboard();
+    tickClock();
+    setInterval(tickClock, 1000);
+  }
+
+  function tickClock(){
+    const d = new Date();
+    const hh = String(d.getUTCHours()).padStart(2,'0');
+    const mm = String(d.getUTCMinutes()).padStart(2,'0');
+    const ss = String(d.getUTCSeconds()).padStart(2,'0');
+    document.getElementById('zulu-clock').textContent = hh+':'+mm+':'+ss+'Z';
+  }
+
+  /* ---------- tabs ---------- */
+  document.querySelectorAll('.tab-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
+    });
+  });
+
+  /* ---------- CID settings ---------- */
+  document.getElementById('btn-save-cid').addEventListener('click', ()=>{
+    const val = document.getElementById('cid-input').value.trim();
+    state.cid = val;
+    setKey('settings-cid', state.cid);
+    const flash = document.getElementById('cid-saved-flash');
+    flash.classList.add('show');
+    setTimeout(()=>flash.classList.remove('show'), 1600);
+  });
+  document.getElementById('cid-input').addEventListener('keydown', (e)=>{
+    if(e.key === 'Enter') document.getElementById('btn-save-cid').click();
+  });
+
+  /* ================= LIVE TAB ================= */
+  let lastLiveSnapshot = null;
+
+  function applyLiveSnapshot(pilot){
+    const statusPill = document.getElementById('live-status-pill');
+    const statusText = document.getElementById('live-status-text');
+    const bodyEl = document.getElementById('live-body');
+    const startBtn = document.getElementById('btn-start-session');
+
+    if(pilot){
+      lastLiveSnapshot = pilot;
+      statusPill.className = 'status-pill online';
+      statusText.textContent = 'Connected — ' + pilot.callsign;
+      const fp = pilot.flight_plan || {};
+      bodyEl.innerHTML =
+        '<div class="readout">'+
+        '<div><div class="val">'+esc(pilot.callsign)+'</div><div class="lbl">Callsign</div></div>'+
+        '<div><div class="val">'+esc(fp.aircraft_short || fp.aircraft || '—')+'</div><div class="lbl">Aircraft</div></div>'+
+        '<div><div class="val">'+esc(fp.departure || '—')+'</div><div class="lbl">Departure</div></div>'+
+        '<div><div class="val">'+esc(fp.arrival || '—')+'</div><div class="lbl">Arrival</div></div>'+
+        '<div><div class="val">'+Math.round(pilot.altitude||0)+'</div><div class="lbl">Altitude ft</div></div>'+
+        '<div><div class="val">'+Math.round(pilot.groundspeed||0)+'</div><div class="lbl">Groundspeed kt</div></div>'+
+        '</div>';
+      startBtn.style.display = state.activeSession ? 'none' : 'inline-block';
+    } else {
+      lastLiveSnapshot = null;
+      statusPill.className = 'status-pill offline';
+      statusText.textContent = 'Not connected';
+      bodyEl.innerHTML = '<div class="empty">No active session found'+(state.cid?(' for CID '+esc(state.cid)):'')+'.</div>';
+      startBtn.style.display = 'none';
+    }
+    renderActiveSessionCard();
+  }
+
+  async function fetchLiveStatus(){
+    const msgEl = document.getElementById('live-msg');
+    const cid = (state.cid || document.getElementById('cid-input').value.trim());
+    if(!cid){
+      msgEl.textContent = 'Save your CID first.';
+      msgEl.className = 'msg error';
+      return;
+    }
+    msgEl.textContent = 'Checking network...';
+    msgEl.className = 'msg';
+    try{
+      const data = await getVatsimFeed(true);
+      const pilot = (data.pilots || []).find(p => String(p.cid) === String(cid));
+      applyLiveSnapshot(pilot || null);
+      msgEl.textContent = '';
+    }catch(e){
+      msgEl.textContent = 'Could not reach the VATSIM data feed. Try again in a moment.';
+      msgEl.className = 'msg error';
+    }
+  }
+
+  document.getElementById('btn-refresh-live').addEventListener('click', fetchLiveStatus);
+
+  document.getElementById('btn-start-session').addEventListener('click', ()=>{
+    if(!lastLiveSnapshot) return;
+    const fp = lastLiveSnapshot.flight_plan || {};
+    state.activeSession = {
+      startedAt: Date.now(),
+      callsign: lastLiveSnapshot.callsign,
+      aircraft: fp.aircraft_short || fp.aircraft || '',
+      departure: fp.departure || '',
+      arrival: fp.arrival || ''
+    };
+    setKey('active-session', state.activeSession);
+    document.getElementById('btn-start-session').style.display = 'none';
+    renderActiveSessionCard();
+  });
+
+  document.getElementById('btn-end-session').addEventListener('click', ()=>{
+    if(!state.activeSession) return;
+    const durationHrs = ((Date.now() - state.activeSession.startedAt) / 3600000);
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    document.querySelector('.tab-btn[data-tab="logbook"]').classList.add('active');
+    document.getElementById('tab-logbook').classList.add('active');
+
+    document.getElementById('lb-date').value = new Date().toISOString().slice(0,10);
+    document.getElementById('lb-callsign').value = state.activeSession.callsign || '';
+    document.getElementById('lb-aircraft').value = state.activeSession.aircraft || '';
+    document.getElementById('lb-dep').value = state.activeSession.departure || '';
+    document.getElementById('lb-arr').value = (lastLiveSnapshot && lastLiveSnapshot.flight_plan && lastLiveSnapshot.flight_plan.arrival) || state.activeSession.arrival || '';
+    document.getElementById('lb-dur').value = Math.max(0.1, Math.round(durationHrs*10)/10);
+    document.getElementById('lb-notes').value = 'Logged from live VATSIM session';
+
+    state.activeSession = null;
+    setKey('active-session', null);
+    renderActiveSessionCard();
+  });
+
+  function renderActiveSessionCard(){
+    const card = document.getElementById('active-session-card');
+    const endBtn = document.getElementById('btn-end-session');
+    if(state.activeSession){
+      card.style.display = 'block';
+      endBtn.style.display = 'inline-block';
+      const mins = Math.floor((Date.now() - state.activeSession.startedAt)/60000);
+      document.getElementById('active-session-readout').innerHTML =
+        '<div><div class="val">'+esc(state.activeSession.callsign||'—')+'</div><div class="lbl">Callsign</div></div>'+
+        '<div><div class="val">'+esc(state.activeSession.departure||'—')+'</div><div class="lbl">From</div></div>'+
+        '<div><div class="val">'+mins+' min</div><div class="lbl">Elapsed</div></div>';
+    } else {
+      card.style.display = 'none';
+      endBtn.style.display = 'none';
+    }
+  }
+
+  function renderLive(){ renderActiveSessionCard(); }
+
+  /* ================= LOGBOOK TAB ================= */
+  function renderLogbook(){
+    const totalHrs = state.logbook.reduce((s,e)=>s+(parseFloat(e.duration)||0),0);
+    const flights = state.logbook.length;
+    const airports = new Set();
+    state.logbook.forEach(e=>{ if(e.dep) airports.add(e.dep); if(e.arr) airports.add(e.arr); });
+
+    document.getElementById('logbook-totals').innerHTML =
+      '<div><div class="val">'+totalHrs.toFixed(1)+'</div><div class="lbl">Total hours</div></div>'+
+      '<div><div class="val">'+flights+'</div><div class="lbl">Flights logged</div></div>'+
+      '<div><div class="val">'+airports.size+'</div><div class="lbl">Airports visited</div></div>';
+
+    renderLogbookChart();
+    renderLogbookTable();
+  }
+
+  function renderLogbookChart(){
+    const now = new Date();
+    const months = [];
+    for(let i=5;i>=0;i--){
+      const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+      months.push({key: d.getFullYear()+'-'+d.getMonth(), label: d.toLocaleString('default',{month:'short'}), total:0});
+    }
+    state.logbook.forEach(e=>{
+      if(!e.date) return;
+      const d = new Date(e.date);
+      const key = d.getFullYear()+'-'+d.getMonth();
+      const m = months.find(m=>m.key===key);
+      if(m) m.total += (parseFloat(e.duration)||0);
+    });
+    const max = Math.max(1, ...months.map(m=>m.total));
+    const w = 600, h = 110, bw = w/months.length;
+    let bars = '';
+    months.forEach((m,i)=>{
+      const barH = (m.total/max) * 70;
+      const x = i*bw + bw*0.25;
+      const y = 80 - barH;
+      bars += '<rect x="'+x+'" y="'+y+'" width="'+(bw*0.5)+'" height="'+barH+'" fill="var(--cyan-dim)" stroke="var(--cyan)" rx="2"></rect>';
+      bars += '<text class="bar-val" x="'+(x+bw*0.25)+'" y="'+(y-5)+'" text-anchor="middle">'+m.total.toFixed(1)+'</text>';
+      bars += '<text class="bar-label" x="'+(x+bw*0.25)+'" y="98" text-anchor="middle">'+m.label+'</text>';
+    });
+    document.getElementById('logbook-chart').innerHTML =
+      (state.logbook.length===0)
+        ? '<div class="empty">Log a flight to see your trend.</div>'
+        : '<svg viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="xMidYMid meet">'+bars+'</svg>';
+  }
+
+  function renderLogbookTable(){
+    const el = document.getElementById('logbook-table');
+    if(state.logbook.length === 0){
+      el.innerHTML = '<div class="empty">No flights logged yet.</div>';
+      return;
+    }
+    const sorted = [...state.logbook].sort((a,b)=> (b.date||'').localeCompare(a.date||''));
+    let rows = sorted.map(e =>
+      '<tr>'+
+      '<td>'+esc(e.date||'—')+'</td>'+
+      '<td>'+esc(e.callsign||'—')+'</td>'+
+      '<td>'+esc(e.aircraft||'—')+'</td>'+
+      '<td>'+esc(e.dep||'—')+' &rarr; '+esc(e.arr||'—')+'</td>'+
+      '<td>'+(parseFloat(e.duration)||0).toFixed(1)+'</td>'+
+      '<td style="color:var(--text-muted);">'+esc(e.notes||'')+'</td>'+
+      '<td><button class="icon-btn" data-del="'+e.id+'" title="Delete">&times;</button></td>'+
+      '</tr>'
+    ).join('');
+    el.innerHTML = '<table><thead><tr><th>Date</th><th>Callsign</th><th>A/C</th><th>Route</th><th>Hrs</th><th>Notes</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
+    el.querySelectorAll('[data-del]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        state.logbook = state.logbook.filter(e=>e.id !== btn.dataset.del);
+        setKey('logbook-entries', state.logbook);
+        renderLogbook();
+      });
+    });
+  }
+
+  document.getElementById('btn-add-entry').addEventListener('click', ()=>{
+    const date = document.getElementById('lb-date').value;
+    const callsign = document.getElementById('lb-callsign').value.trim();
+    const aircraft = document.getElementById('lb-aircraft').value.trim();
+    const dep = document.getElementById('lb-dep').value.trim().toUpperCase();
+    const arr = document.getElementById('lb-arr').value.trim().toUpperCase();
+    const duration = document.getElementById('lb-dur').value;
+    const notes = document.getElementById('lb-notes').value.trim();
+    if(!date || !duration){
+      alert('At least a date and duration are needed.');
+      return;
+    }
+    state.logbook.push({id: 'f'+Date.now(), date, callsign, aircraft, dep, arr, duration, notes});
+    setKey('logbook-entries', state.logbook);
+    ['lb-callsign','lb-aircraft','lb-dep','lb-arr','lb-dur','lb-notes'].forEach(id=>document.getElementById(id).value='');
+    renderLogbook();
+  });
+
+  /* ================= KNEEBOARD TAB ================= */
+  function currentKneeboard(){
+    return state.kneeboards.find(k=>k.id===state.activeKneeboardId) || state.kneeboards[0];
+  }
+
+  let sortableInstances = [];
+  function destroySortables(){
+    sortableInstances.forEach(s=>s.destroy());
+    sortableInstances = [];
+  }
+
+  function renderKneeboard(){
+    const sel = document.getElementById('kb-template-select');
+    sel.innerHTML = state.kneeboards.map(k=>'<option value="'+k.id+'">'+esc(k.name)+'</option>').join('');
+    sel.value = state.activeKneeboardId;
+    const kb = currentKneeboard();
+    if(!kb) return;
+    document.getElementById('kb-name').value = kb.name;
+    renderKneeboardSections(kb);
+    renderPrintArea(kb);
+  }
+
+  function renderKneeboardSections(kb){
+    destroySortables();
+    const wrap = document.getElementById('kb-sections');
+    wrap.innerHTML = kb.sections.map(sec =>
+      '<div class="kb-section" data-sec-id="'+sec.id+'">'+
+        '<div class="kb-section-head">'+
+          '<span class="drag-handle">⠿⠿</span>'+
+          '<input type="text" value="'+escAttr(sec.title)+'" data-sec-title="'+sec.id+'">'+
+          '<button class="icon-btn" data-del-sec="'+sec.id+'">&times;</button>'+
+        '</div>'+
+        '<div class="kb-items" data-items-for="'+sec.id+'">'+
+          sec.items.map(item =>
+            '<div class="kb-item '+(item.checked?'checked':'')+'" data-item-id="'+item.id+'">'+
+              '<span class="drag-handle">⠿⠿</span>'+
+              '<input type="checkbox" '+(item.checked?'checked':'')+' data-check="'+item.id+'">'+
+              '<input type="text" value="'+escAttr(item.text)+'" data-text="'+item.id+'">'+
+              '<button class="icon-btn" data-del-item="'+item.id+'">&times;</button>'+
+            '</div>'
+          ).join('') +
+        '</div>'+
+        '<div class="kb-add-item"><button class="btn small" data-add-item="'+sec.id+'">+ Item</button></div>'+
+      '</div>'
+    ).join('');
+
+    wrap.querySelectorAll('[data-sec-title]').forEach(inp=>{
+      inp.addEventListener('input', ()=>{
+        findSection(kb, inp.dataset.secTitle).title = inp.value;
+        setKey('kneeboard-templates-v2', state.kneeboards);
+      });
+    });
+    wrap.querySelectorAll('[data-check]').forEach(cb=>{
+      cb.addEventListener('change', ()=>{
+        const item = findItem(kb, cb.dataset.check);
+        item.checked = cb.checked;
+        cb.closest('.kb-item').classList.toggle('checked', cb.checked);
+        setKey('kneeboard-templates-v2', state.kneeboards);
+      });
+    });
+    wrap.querySelectorAll('[data-text]').forEach(inp=>{
+      inp.addEventListener('input', ()=>{
+        findItem(kb, inp.dataset.text).text = inp.value;
+        setKey('kneeboard-templates-v2', state.kneeboards);
+      });
+    });
+    wrap.querySelectorAll('[data-del-sec]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        kb.sections = kb.sections.filter(s=>s.id !== btn.dataset.delSec);
+        setKey('kneeboard-templates-v2', state.kneeboards);
+        renderKneeboardSections(kb);
+        renderPrintArea(kb);
+      });
+    });
+    wrap.querySelectorAll('[data-del-item]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        kb.sections.forEach(s=>{ s.items = s.items.filter(i=>i.id !== btn.dataset.delItem); });
+        setKey('kneeboard-templates-v2', state.kneeboards);
+        renderKneeboardSections(kb);
+        renderPrintArea(kb);
+      });
+    });
+    wrap.querySelectorAll('[data-add-item]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        findSection(kb, btn.dataset.addItem).items.push({id:newId('it'), text:'New item', checked:false});
+        setKey('kneeboard-templates-v2', state.kneeboards);
+        renderKneeboardSections(kb);
+        renderPrintArea(kb);
+      });
+    });
+
+    /* drag-and-drop: sections */
+    if(window.Sortable){
+      const secSortable = Sortable.create(wrap, {
+        handle: '.kb-section-head .drag-handle',
+        animation:150,
+        onEnd: ()=>{ syncSectionOrderFromDOM(kb); renderPrintArea(kb); }
+      });
+      sortableInstances.push(secSortable);
+
+      /* drag-and-drop: items, shared group so items can move between sections */
+      wrap.querySelectorAll('.kb-items').forEach(itemsEl=>{
+        const s = Sortable.create(itemsEl, {
+          group:'kb-items-shared',
+          handle:'.kb-item .drag-handle',
+          animation:150,
+          onEnd: ()=>{ syncItemOrderFromDOM(kb); renderPrintArea(kb); }
+        });
+        sortableInstances.push(s);
+      });
+    }
+  }
+
+  function findSection(kb, secId){ return kb.sections.find(s=>s.id===secId); }
+  function findItem(kb, itemId){
+    for(const s of kb.sections){
+      const it = s.items.find(i=>i.id===itemId);
+      if(it) return it;
+    }
+    return null;
+  }
+
+  function syncSectionOrderFromDOM(kb){
+    const wrap = document.getElementById('kb-sections');
+    const newOrder = [...wrap.querySelectorAll(':scope > .kb-section')].map(el=>el.dataset.secId);
+    kb.sections.sort((a,b)=> newOrder.indexOf(a.id) - newOrder.indexOf(b.id));
+    setKey('kneeboard-templates-v2', state.kneeboards);
+  }
+
+  function syncItemOrderFromDOM(kb){
+    const wrap = document.getElementById('kb-sections');
+    wrap.querySelectorAll('.kb-section').forEach(secEl=>{
+      const secId = secEl.dataset.secId;
+      const sec = findSection(kb, secId);
+      const itemIds = [...secEl.querySelectorAll('.kb-item')].map(el=>el.dataset.itemId);
+      const newItems = itemIds.map(id => findItem(kb, id)).filter(Boolean);
+      sec.items = newItems;
+    });
+    setKey('kneeboard-templates-v2', state.kneeboards);
+  }
+
+  document.getElementById('kb-template-select').addEventListener('change', (e)=>{
+    state.activeKneeboardId = e.target.value;
+    renderKneeboard();
+  });
+
+  document.getElementById('btn-kb-new').addEventListener('click', ()=>{
+    const kb = {id:newId('kb'), name:'New checklist', sections:[{id:newId('sec'), title:'Section', items:[{id:newId('it'), text:'Item one', checked:false}]}]};
+    state.kneeboards.push(kb);
+    state.activeKneeboardId = kb.id;
+    setKey('kneeboard-templates-v2', state.kneeboards);
+    renderKneeboard();
+  });
+
+  document.getElementById('btn-kb-delete').addEventListener('click', ()=>{
+    if(state.kneeboards.length <= 1){ alert('Keep at least one checklist.'); return; }
+    state.kneeboards = state.kneeboards.filter(k=>k.id !== state.activeKneeboardId);
+    state.activeKneeboardId = state.kneeboards[0].id;
+    setKey('kneeboard-templates-v2', state.kneeboards);
+    renderKneeboard();
+  });
+
+  document.getElementById('btn-kb-add-section').addEventListener('click', ()=>{
+    const kb = currentKneeboard();
+    kb.sections.push({id:newId('sec'), title:'New section', items:[{id:newId('it'), text:'Item', checked:false}]});
+    setKey('kneeboard-templates-v2', state.kneeboards);
+    renderKneeboardSections(kb);
+    renderPrintArea(kb);
+  });
+
+  document.getElementById('kb-name').addEventListener('input', (e)=>{
+    const kb = currentKneeboard();
+    kb.name = e.target.value;
+    setKey('kneeboard-templates-v2', state.kneeboards);
+    document.querySelector('#kb-template-select option[value="'+kb.id+'"]').textContent = kb.name || 'Untitled';
+  });
+
+  document.getElementById('btn-kb-reset').addEventListener('click', ()=>{
+    const kb = currentKneeboard();
+    kb.sections.forEach(s=>s.items.forEach(i=>i.checked=false));
+    setKey('kneeboard-templates-v2', state.kneeboards);
+    renderKneeboardSections(kb);
+  });
+
+  document.getElementById('btn-kb-print').addEventListener('click', ()=>{
+    renderPrintArea(currentKneeboard());
+    window.print();
+  });
+
+  function renderPrintArea(kb){
+    document.getElementById('print-area').innerHTML =
+      '<div style="font-family:Georgia,serif;max-width:380px;padding:16px;border:2px solid #000;">'+
+      '<h2 style="margin:0 0 10px 0;font-size:18px;border-bottom:2px solid #000;padding-bottom:6px;">'+esc(kb.name)+'</h2>'+
+      kb.sections.map(sec =>
+        '<div style="margin-bottom:10px;">'+
+        '<div style="font-weight:bold;font-size:13px;margin-bottom:4px;">'+esc(sec.title)+'</div>'+
+        sec.items.map(item => '<div style="font-size:12px;padding:2px 0;">&#9633; '+esc(item.text)+'</div>').join('') +
+        '</div>'
+      ).join('') +
+      '</div>';
+  }
+
+  /* ================= ROUTE TAB ================= */
+  document.getElementById('btn-rt-load').addEventListener('click', ()=>{
+    const dep = document.getElementById('rt-dep').value.trim().toUpperCase();
+    const arr = document.getElementById('rt-arr').value.trim().toUpperCase();
+    loadRoute(dep, arr, false);
+  });
+
+  async function tryAutofillRoute(){
+    const msgEl = document.getElementById('route-auto-msg');
+    if(!state.cid){
+      msgEl.textContent = 'Save your CID on the Live tab to enable auto-fill, or enter airports manually below.';
+      msgEl.className = 'msg';
+      return;
+    }
+    msgEl.textContent = 'Checking your live status...';
+    msgEl.className = 'msg';
+    try{
+      const data = await getVatsimFeed(false);
+      const pilot = (data.pilots || []).find(p => String(p.cid) === String(state.cid));
+      applyLiveSnapshot(pilot || null);
+    }catch(e){
+      /* feed unreachable — fall through using whatever snapshot we already had, if any */
+    }
+
+    if(lastLiveSnapshot && lastLiveSnapshot.flight_plan && (lastLiveSnapshot.flight_plan.departure || lastLiveSnapshot.flight_plan.arrival)){
+      const fp = lastLiveSnapshot.flight_plan;
+      document.getElementById('rt-dep').value = fp.departure || '';
+      document.getElementById('rt-arr').value = fp.arrival || '';
+      msgEl.textContent = 'Auto-filled from your active flight plan.';
+      msgEl.className = 'msg ok';
+      loadRoute(fp.departure || '', fp.arrival || '', true);
+    } else {
+      msgEl.textContent = 'No active flight plan detected — check status on the Live tab, or enter airports manually.';
+      msgEl.className = 'msg';
+    }
+  }
+
+  document.querySelector('.tab-btn[data-tab="route"]').addEventListener('click', tryAutofillRoute);
+
+  async function loadRoute(dep, arr, silent){
+    const resultsEl = document.getElementById('route-results');
+    const airports = [dep, arr].filter(a => a && a.length === 4);
+    const stripEl = document.getElementById('route-strip');
+    if(airports.length === 0){
+      if(!silent) resultsEl.innerHTML = '<div class="empty">Enter at least one 4-letter ICAO code.</div>';
+      return;
+    }
+    stripEl.innerHTML = (dep && dep.length===4 ? esc(dep) : '????') +
+      ' <span class="rs-icon">&#9992;</span> ' +
+      (arr && arr.length===4 ? esc(arr) : '????');
+    resultsEl.innerHTML = airports.map(a=>'<div class="card"><div class="card-title">'+esc(a)+'</div><div class="empty">Loading…</div></div>').join('');
+
+    let vatsimData = null;
+    let vatsimFeedFailed = false;
+    try{ vatsimData = await getVatsimFeed(false); }catch(e){ vatsimFeedFailed = true; }
+
+    try{
+      const cards = await Promise.all(airports.map(icao => buildAirportCard(icao, vatsimData, vatsimFeedFailed)));
+      resultsEl.innerHTML = cards.join('');
+    }catch(e){
+      resultsEl.innerHTML = '<div class="card"><div class="empty">Something went wrong loading route resources. Try again in a moment.</div></div>';
+    }
+  }
+
+  async function buildAirportCard(icao, vatsimData, vatsimFeedFailed){
+    let metarHtml = '<div class="empty">Weather unavailable.</div>';
+    try{
+      const res = await corsFetch('https://aviationweather.gov/api/data/metar?ids='+icao+'&format=json');
+      {
+        const data = await res.json();
+        if(data && data.length){
+          const m = data[0];
+          metarHtml =
+            '<div class="metar-raw">'+esc(m.rawOb || m.raw_text || 'No raw text')+'</div>'+
+            '<div class="readout">'+
+            '<div><div class="val">'+(m.wdir!=null?m.wdir:'—')+'&deg;/'+(m.wspd!=null?m.wspd:'—')+'kt</div><div class="lbl">Wind</div></div>'+
+            '<div><div class="val">'+(m.visib!=null?m.visib:'—')+'</div><div class="lbl">Visibility</div></div>'+
+            '<div><div class="val">'+(m.temp!=null?m.temp:'—')+'&deg;/'+(m.dewp!=null?m.dewp:'—')+'&deg;</div><div class="lbl">Temp/Dew C</div></div>'+
+            '<div><div class="val">'+(m.altim!=null?m.altim:'—')+'</div><div class="lbl">Altimeter</div></div>'+
+            '</div>';
+        } else {
+          metarHtml = '<div class="empty">No current METAR for '+esc(icao)+'.</div>';
+        }
+      }
+    }catch(e){ /* keep default */ }
+
+    let atisHtml = '<div class="empty">No ATIS published on the network.</div>';
+    let atcHtml = '<div class="empty">No ATC currently online for '+esc(icao)+'.</div>';
+    if(vatsimFeedFailed){
+      atisHtml = '<div class="empty">Couldn\'t reach the VATSIM feed to check ATIS. Try again shortly.</div>';
+      atcHtml = '<div class="empty">Couldn\'t reach the VATSIM feed to check ATC. Try again shortly.</div>';
+    } else if(vatsimData){
+      const atisList = (vatsimData.atis || []).filter(a => (a.callsign||'').toUpperCase().startsWith(icao));
+      if(atisList.length){
+        atisHtml = atisList.map(a =>
+          '<div style="margin-bottom:8px;">'+
+          '<div style="color:var(--amber);font-family:var(--font-head);font-size:14px;">'+esc(a.callsign)+' — '+(a.frequency||'—')+'</div>'+
+          '<div class="metar-raw">'+esc((a.text_atis||[]).join(' ') || 'No text available')+'</div>'+
+          '</div>'
+        ).join('');
+      }
+      const atcList = (vatsimData.controllers || []).filter(c => (c.callsign||'').toUpperCase().startsWith(icao));
+      if(atcList.length){
+        atcHtml = '<table><thead><tr><th>Position</th><th>Frequency</th></tr></thead><tbody>'+
+          atcList.map(c => '<tr><td>'+esc(c.callsign)+'</td><td>'+esc(c.frequency||'—')+'</td></tr>').join('') +
+          '</tbody></table>';
+      }
+    }
+
+    return '<div class="card">'+
+      '<div class="card-title">'+esc(icao)+' <a href="https://chartfox.org/'+encodeURIComponent(icao)+'" target="_blank" rel="noopener" class="btn small" style="text-decoration:none;">Open charts ↗</a></div>'+
+      '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">Weather</div>'+
+      metarHtml+
+      '<div style="font-size:11px;color:var(--text-muted);margin:14px 0 8px 0;">ATIS</div>'+
+      atisHtml+
+      '<div style="font-size:11px;color:var(--text-muted);margin:14px 0 8px 0;">Online ATC</div>'+
+      atcHtml+
+      '</div>';
+  }
+
+  /* ---------- utils ---------- */
+  function esc(s){
+    return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function escAttr(s){ return esc(s).replace(/"/g,'&quot;'); }
+
+  init();
+})();
+</script>
+</body>
+</html>
