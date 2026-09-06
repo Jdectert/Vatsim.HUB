@@ -1,1 +1,1 @@
-# Vatsim.HUB
+# Flight Deck A personal VATSIM hub — live status, logbook, kneeboard checklists, and route resources (weather, ATIS, ATC frequencies, ChartFox links).
