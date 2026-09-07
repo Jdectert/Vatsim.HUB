@@ -13,6 +13,8 @@
 })();
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
   :root{
     --bg:#F1F2F4;
@@ -327,6 +329,24 @@
   .saved-flash{color:var(--green);font-size:12.5px;margin-left:8px;opacity:0;transition:opacity .2s;font-weight:600;}
   .saved-flash.show{opacity:1;}
 
+  /* ---- live map ---- */
+  #live-map{
+    height:280px;
+    border-radius:10px;
+    border:1px solid var(--border);
+    overflow:hidden;
+    background:var(--surface-alt);
+  }
+  .plane-icon{
+    font-size:20px;
+    line-height:1;
+    color:var(--blue);
+    text-shadow:0 0 2px var(--card),0 0 4px var(--card);
+    transform-origin:center center;
+  }
+  .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:var(--card);color:var(--text);}
+  .leaflet-container{font-family:var(--font-ui);}
+
   /* ---- checklist / kneeboard ---- */
   .card.kb-editor{
     background:var(--bg);
@@ -487,7 +507,7 @@
     <!-- LIVE TAB -->
     <section class="panel active" id="tab-live">
       <h2>Live network status</h2>
-      <div class="subhead">Checks the public VATSIM data feed for your session.</div>
+      <div class="subhead">Auto-tracks your VATSIM session and logs it when you land — no manual entry needed.</div>
 
       <div class="card">
         <div class="card-title">Your VATSIM CID</div>
@@ -501,17 +521,17 @@
             <span class="saved-flash" id="cid-saved-flash">Saved ✓</span>
           </div>
         </div>
+        <div class="msg" id="cid-msg"></div>
       </div>
 
       <div class="card">
         <div class="card-title">Your connection</div>
         <div id="live-body">
-          <div class="empty">Save your CID above, then check status.</div>
+          <div class="empty">Save your CID above — we'll auto-refresh every 15s and pick up your flight as soon as you connect.</div>
         </div>
         <div class="btn-row">
-          <button class="btn primary" id="btn-refresh-live">Check status</button>
-          <button class="btn warn" id="btn-start-session" style="display:none;">Start logging this session</button>
-          <button class="btn danger" id="btn-end-session" style="display:none;">End & log session</button>
+          <button class="btn primary" id="btn-refresh-live">Refresh now</button>
+          <button class="btn danger" id="btn-end-session" style="display:none;">End session &amp; log now</button>
         </div>
         <div class="msg" id="live-msg"></div>
       </div>
@@ -519,6 +539,12 @@
       <div class="card" id="active-session-card" style="display:none;">
         <div class="card-title">Session in progress</div>
         <div class="readout" id="active-session-readout"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Live position</div>
+        <div id="live-map"></div>
+        <div class="msg" id="live-map-msg">Save your CID and connect to see your live position here.</div>
       </div>
     </section>
 
@@ -763,6 +789,169 @@
     return data;
   }
 
+  /* ---------- airport coordinates (for the live map's dep/arr markers) ----------
+     VATSIM's feed gives live lat/lon but no airport geometry, so we resolve
+     ICAO -> [lat, lon] from OpenFlights' public airport database, fetched once
+     and cached in localStorage. Best-effort: if it fails, we just skip the
+     dep/arr markers and route line and still show the live position marker. */
+  let airportDb = null;
+  let airportDbLoadPromise = null;
+  function parseCsvLine(line){
+    const result = [];
+    let cur = '', inQuotes = false;
+    for(let i = 0; i < line.length; i++){
+      const c = line[i];
+      if(inQuotes){
+        if(c === '"'){
+          if(line[i + 1] === '"'){ cur += '"'; i++; }
+          else inQuotes = false;
+        } else cur += c;
+      } else {
+        if(c === '"') inQuotes = true;
+        else if(c === ','){ result.push(cur); cur = ''; }
+        else cur += c;
+      }
+    }
+    result.push(cur);
+    return result;
+  }
+  function ensureAirportDb(){
+    if(airportDb) return Promise.resolve(airportDb);
+    if(airportDbLoadPromise) return airportDbLoadPromise;
+    airportDbLoadPromise = (async () => {
+      const cached = getKey('airport-db-v1', null);
+      if(cached){ airportDb = cached; return airportDb; }
+      try{
+        const res = await fetch('https://raw.githubusercontent.com/jpatokal/openflights/master/data/airports.dat');
+        const text = await res.text();
+        const db = {};
+        text.split('\n').forEach(line => {
+          if(!line.trim()) return;
+          const f = parseCsvLine(line);
+          const icao = (f[5] || '').trim();
+          const lat = parseFloat(f[6]);
+          const lon = parseFloat(f[7]);
+          if(icao && icao.length === 4 && icao !== '\\N' && isFinite(lat) && isFinite(lon)){
+            db[icao] = [lat, lon];
+          }
+        });
+        airportDb = db;
+        setKey('airport-db-v1', db);
+      }catch(e){
+        airportDb = {};
+      }
+      return airportDb;
+    })();
+    return airportDbLoadPromise;
+  }
+  async function getAirportCoords(icao){
+    if(!icao) return null;
+    const db = await ensureAirportDb();
+    return db[icao.toUpperCase()] || null;
+  }
+
+  /* ---------- live map ---------- */
+  let liveMap = null;
+  let liveMapPlaneMarker = null;
+  let liveMapDepMarker = null;
+  let liveMapArrMarker = null;
+  let liveMapRouteLine = null;
+  let liveMapFitDone = false;
+
+  function ensureLiveMap(){
+    if(liveMap || !window.L) return liveMap;
+    liveMap = L.map('live-map', {attributionControl: true}).setView([20, 0], 2);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'
+    }).addTo(liveMap);
+    return liveMap;
+  }
+
+  function planeIcon(heading){
+    return L.divIcon({
+      className: '',
+      html: '<div class="plane-icon" style="transform:rotate(' + (heading || 0) + 'deg);">&#10148;</div>',
+      iconSize: [24, 24],
+      iconAnchor: [12, 12]
+    });
+  }
+
+  function clearMapRoute(){
+    if(!liveMap) return;
+    if(liveMapDepMarker){ liveMap.removeLayer(liveMapDepMarker); liveMapDepMarker = null; }
+    if(liveMapArrMarker){ liveMap.removeLayer(liveMapArrMarker); liveMapArrMarker = null; }
+    if(liveMapRouteLine){ liveMap.removeLayer(liveMapRouteLine); liveMapRouteLine = null; }
+    liveMapFitDone = false;
+  }
+
+  async function updateLiveMap(pilot){
+    const map = ensureLiveMap();
+    if(!map) return;
+    const msgEl = document.getElementById('live-map-msg');
+
+    if(!pilot || pilot.latitude == null || pilot.longitude == null){
+      if(liveMapPlaneMarker){ map.removeLayer(liveMapPlaneMarker); liveMapPlaneMarker = null; }
+      msgEl.textContent = state.cid ? 'Save your CID and connect to see your live position here.' : 'Save your CID above to enable live tracking.';
+      return;
+    }
+
+    msgEl.textContent = '';
+    const latlng = [pilot.latitude, pilot.longitude];
+    const icon = planeIcon(pilot.heading);
+    if(!liveMapPlaneMarker){
+      liveMapPlaneMarker = L.marker(latlng, {icon}).addTo(map);
+    } else {
+      liveMapPlaneMarker.setLatLng(latlng);
+      liveMapPlaneMarker.setIcon(icon);
+    }
+    liveMapPlaneMarker.bindPopup(
+      '<strong>' + esc(pilot.callsign) + '</strong><br>' +
+      Math.round(pilot.altitude || 0) + ' ft &middot; ' + Math.round(pilot.groundspeed || 0) + ' kt'
+    );
+
+    const fp = pilot.flight_plan || {};
+    const bounds = [latlng];
+    try{
+      if(fp.departure){
+        const dep = await getAirportCoords(fp.departure);
+        if(dep){
+          if(!liveMapDepMarker) liveMapDepMarker = L.circleMarker(dep, {radius: 5, color: '#2FA84F', weight: 2, fillOpacity: 0.9}).addTo(map);
+          else liveMapDepMarker.setLatLng(dep);
+          liveMapDepMarker.bindTooltip(fp.departure);
+          bounds.push(dep);
+        }
+      }
+      if(fp.arrival){
+        const arr = await getAirportCoords(fp.arrival);
+        if(arr){
+          if(!liveMapArrMarker) liveMapArrMarker = L.circleMarker(arr, {radius: 5, color: '#D6392E', weight: 2, fillOpacity: 0.9}).addTo(map);
+          else liveMapArrMarker.setLatLng(arr);
+          liveMapArrMarker.bindTooltip(fp.arrival);
+          bounds.push(arr);
+        }
+      }
+      if(liveMapDepMarker && liveMapArrMarker){
+        const line = [liveMapDepMarker.getLatLng(), liveMapArrMarker.getLatLng()];
+        if(!liveMapRouteLine) liveMapRouteLine = L.polyline(line, {color: '#0A7CFF', weight: 2, dashArray: '6 6', opacity: 0.7}).addTo(map);
+        else liveMapRouteLine.setLatLngs(line);
+      }
+    }catch(e){ /* airport lookup is best-effort — the live position marker still renders */ }
+
+    if(!liveMapFitDone){
+      if(bounds.length > 1) map.fitBounds(bounds, {padding: [30, 30]});
+      else map.setView(latlng, 7);
+      liveMapFitDone = true;
+    }
+  }
+
+  /* ---------- logbook helper (shared by manual entry + auto-logging) ---------- */
+  function addLogbookEntry(entry){
+    state.logbook.push(Object.assign({id: 'f' + Date.now() + '_' + (idCounter++)}, entry));
+    setKey('logbook-entries', state.logbook);
+    renderLogbook();
+  }
+
   /* ---------- init ---------- */
   async function init(){
     state.cid = await getKey('settings-cid', '');
@@ -778,6 +967,7 @@
     renderKneeboard();
     tickClock();
     setInterval(tickClock, 1000);
+    startAutoTracking();
   }
 
   function tickClock(){
@@ -795,6 +985,7 @@
       document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
       btn.classList.add('active');
       document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
+      if(btn.dataset.tab === 'live' && liveMap) setTimeout(() => liveMap.invalidateSize(), 0);
     });
   });
 
@@ -806,6 +997,16 @@
     const flash = document.getElementById('cid-saved-flash');
     flash.classList.add('show');
     setTimeout(()=>flash.classList.remove('show'), 1600);
+
+    const cidMsg = document.getElementById('cid-msg');
+    if(val){
+      cidMsg.textContent = "Auto-tracking is on — we'll pick up your next VATSIM connection and log it automatically. (VATSIM doesn't publish a public API for past flight history, so flights before now can't be pulled in — only entered manually on the Logbook tab.)";
+      cidMsg.className = 'msg';
+    } else {
+      cidMsg.textContent = '';
+    }
+    liveMapFitDone = false;
+    startAutoTracking();
   });
   document.getElementById('cid-input').addEventListener('keydown', (e)=>{
     if(e.key === 'Enter') document.getElementById('btn-save-cid').click();
@@ -813,12 +1014,20 @@
 
   /* ================= LIVE TAB ================= */
   let lastLiveSnapshot = null;
+  let missedPollCount = 0;
+  let pollIntervalId = null;
+
+  function startAutoTracking(){
+    if(pollIntervalId){ clearInterval(pollIntervalId); pollIntervalId = null; }
+    if(!state.cid) return;
+    pollLiveFeed(false);
+    pollIntervalId = setInterval(() => pollLiveFeed(false), 15000);
+  }
 
   function applyLiveSnapshot(pilot){
     const statusPill = document.getElementById('live-status-pill');
     const statusText = document.getElementById('live-status-text');
     const bodyEl = document.getElementById('live-body');
-    const startBtn = document.getElementById('btn-start-session');
 
     if(pilot){
       lastLiveSnapshot = pilot;
@@ -834,74 +1043,107 @@
         '<div><div class="val">'+Math.round(pilot.altitude||0)+'</div><div class="lbl">Altitude ft</div></div>'+
         '<div><div class="val">'+Math.round(pilot.groundspeed||0)+'</div><div class="lbl">Groundspeed kt</div></div>'+
         '</div>';
-      startBtn.style.display = state.activeSession ? 'none' : 'inline-block';
     } else {
       lastLiveSnapshot = null;
       statusPill.className = 'status-pill offline';
       statusText.textContent = 'Not connected';
-      bodyEl.innerHTML = '<div class="empty">No active session found'+(state.cid?(' for CID '+esc(state.cid)):'')+'.</div>';
-      startBtn.style.display = 'none';
+      bodyEl.innerHTML = '<div class="empty">No active session found'+(state.cid?(' for CID '+esc(state.cid)):'')+'. Auto-refreshing every 15s.</div>';
     }
+    renderActiveSessionCard();
+    updateLiveMap(pilot);
+  }
+
+  /* Ends the tracked session, writes it to the logbook automatically, and
+     clears the map route. Called either automatically (pilot has vanished
+     from the feed for two consecutive polls, ~30s — a grace window so one
+     missed/late poll doesn't end the session early) or via the manual
+     "End session & log now" override. */
+  function endActiveSession(){
+    if(!state.activeSession) return;
+    const session = state.activeSession;
+    const endedAt = Date.now();
+    const fp = (lastLiveSnapshot && lastLiveSnapshot.flight_plan) || {};
+    const durationHrs = Math.max(0.1, Math.round(((endedAt - session.startedAt) / 3600000) * 10) / 10);
+    addLogbookEntry({
+      date: new Date(session.startedAt).toISOString().slice(0, 10),
+      callsign: session.callsign || '',
+      aircraft: session.aircraft || '',
+      dep: (session.departure || '').toUpperCase(),
+      arr: (fp.arrival || session.arrival || '').toUpperCase(),
+      duration: durationHrs,
+      notes: 'Logged automatically from live VATSIM session'
+    });
+    state.activeSession = null;
+    setKey('active-session', null);
+    clearMapRoute();
     renderActiveSessionCard();
   }
 
-  async function fetchLiveStatus(){
+  function handlePilotUpdate(pilot){
+    if(pilot){
+      missedPollCount = 0;
+      const fp = pilot.flight_plan || {};
+      if(!state.activeSession){
+        state.activeSession = {
+          startedAt: pilot.logon_time ? new Date(pilot.logon_time).getTime() : Date.now(),
+          callsign: pilot.callsign,
+          aircraft: fp.aircraft_short || fp.aircraft || '',
+          departure: fp.departure || '',
+          arrival: fp.arrival || ''
+        };
+      } else {
+        /* keep dep/arr/aircraft in sync in case the flight plan was filed or amended after we started tracking */
+        if(fp.departure && !state.activeSession.departure) state.activeSession.departure = fp.departure;
+        if(fp.arrival && !state.activeSession.arrival) state.activeSession.arrival = fp.arrival;
+        if((fp.aircraft_short || fp.aircraft) && !state.activeSession.aircraft) state.activeSession.aircraft = fp.aircraft_short || fp.aircraft;
+      }
+      setKey('active-session', state.activeSession);
+    } else if(state.activeSession){
+      missedPollCount++;
+      if(missedPollCount >= 2){
+        endActiveSession();
+        missedPollCount = 0;
+      }
+    }
+    applyLiveSnapshot(pilot);
+  }
+
+  async function pollLiveFeed(manual){
     const msgEl = document.getElementById('live-msg');
-    const cid = (state.cid || document.getElementById('cid-input').value.trim());
-    if(!cid){
-      msgEl.textContent = 'Save your CID first.';
-      msgEl.className = 'msg error';
+    if(!state.cid){
+      if(manual){
+        msgEl.textContent = 'Save your CID first.';
+        msgEl.className = 'msg error';
+      }
       return;
     }
-    msgEl.textContent = 'Checking network...';
-    msgEl.className = 'msg';
+    if(manual){
+      msgEl.textContent = 'Checking network...';
+      msgEl.className = 'msg';
+    }
     try{
       const data = await getVatsimFeed(true);
-      const pilot = (data.pilots || []).find(p => String(p.cid) === String(cid));
-      applyLiveSnapshot(pilot || null);
-      msgEl.textContent = '';
+      const pilot = (data.pilots || []).find(p => String(p.cid) === String(state.cid));
+      handlePilotUpdate(pilot || null);
+      if(manual) msgEl.textContent = '';
     }catch(e){
-      msgEl.textContent = 'Could not reach the VATSIM data feed. Try again in a moment.';
-      msgEl.className = 'msg error';
+      if(manual){
+        msgEl.textContent = 'Could not reach the VATSIM data feed. Try again in a moment.';
+        msgEl.className = 'msg error';
+      }
+      /* a failed poll leaves state untouched — a feed outage should never look like your flight ended */
     }
   }
 
-  document.getElementById('btn-refresh-live').addEventListener('click', fetchLiveStatus);
-
-  document.getElementById('btn-start-session').addEventListener('click', ()=>{
-    if(!lastLiveSnapshot) return;
-    const fp = lastLiveSnapshot.flight_plan || {};
-    state.activeSession = {
-      startedAt: Date.now(),
-      callsign: lastLiveSnapshot.callsign,
-      aircraft: fp.aircraft_short || fp.aircraft || '',
-      departure: fp.departure || '',
-      arrival: fp.arrival || ''
-    };
-    setKey('active-session', state.activeSession);
-    document.getElementById('btn-start-session').style.display = 'none';
-    renderActiveSessionCard();
-  });
+  document.getElementById('btn-refresh-live').addEventListener('click', () => pollLiveFeed(true));
 
   document.getElementById('btn-end-session').addEventListener('click', ()=>{
     if(!state.activeSession) return;
-    const durationHrs = ((Date.now() - state.activeSession.startedAt) / 3600000);
+    endActiveSession();
     document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
     document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
     document.querySelector('.tab-btn[data-tab="logbook"]').classList.add('active');
     document.getElementById('tab-logbook').classList.add('active');
-
-    document.getElementById('lb-date').value = new Date().toISOString().slice(0,10);
-    document.getElementById('lb-callsign').value = state.activeSession.callsign || '';
-    document.getElementById('lb-aircraft').value = state.activeSession.aircraft || '';
-    document.getElementById('lb-dep').value = state.activeSession.departure || '';
-    document.getElementById('lb-arr').value = (lastLiveSnapshot && lastLiveSnapshot.flight_plan && lastLiveSnapshot.flight_plan.arrival) || state.activeSession.arrival || '';
-    document.getElementById('lb-dur').value = Math.max(0.1, Math.round(durationHrs*10)/10);
-    document.getElementById('lb-notes').value = 'Logged from live VATSIM session';
-
-    state.activeSession = null;
-    setKey('active-session', null);
-    renderActiveSessionCard();
   });
 
   function renderActiveSessionCard(){
@@ -921,7 +1163,11 @@
     }
   }
 
-  function renderLive(){ renderActiveSessionCard(); }
+  function renderLive(){
+    renderActiveSessionCard();
+    ensureLiveMap();
+    updateLiveMap(lastLiveSnapshot);
+  }
 
   /* ================= LOGBOOK TAB ================= */
   function renderLogbook(){
@@ -1010,10 +1256,8 @@
       alert('At least a date and duration are needed.');
       return;
     }
-    state.logbook.push({id: 'f'+Date.now(), date, callsign, aircraft, dep, arr, duration, notes});
-    setKey('logbook-entries', state.logbook);
+    addLogbookEntry({date, callsign, aircraft, dep, arr, duration, notes});
     ['lb-callsign','lb-aircraft','lb-dep','lb-arr','lb-dur','lb-notes'].forEach(id=>document.getElementById(id).value='');
-    renderLogbook();
   });
 
   /* ================= KNEEBOARD TAB ================= */
