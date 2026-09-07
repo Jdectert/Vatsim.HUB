@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Flight Deck — Personal VATSIM Hub</title>
+<script>
+(function(){
+  try{
+    var t = JSON.parse(window.localStorage.getItem('flightdeck:theme'));
+    if(t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+  }catch(e){}
+})();
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
 <style>
   :root{
@@ -13,6 +21,8 @@
     --border-strong:#C6C9CE;
     --navy:#0B2D53;
     --navy-soft:#264A73;
+    --heading:#0B2D53;
+    --heading-soft:#264A73;
     --blue:#0A7CFF;
     --blue-dark:#0562CC;
     --blue-tint:#E6F2FF;
@@ -20,13 +30,82 @@
     --green-tint:#E6F7EA;
     --amber:#C8720A;
     --amber-tint:#FCEEDC;
+    --amber-tint-hover:#F7DFC0;
     --red:#D6392E;
     --red-tint:#FBEAE8;
+    --red-tint-hover:#F6D6D3;
     --text:#1C1E21;
     --text-secondary:#6B7076;
     --text-faint:#9DA1A7;
+    --surface-alt:#F7F8F9;
+    --surface-subtle:#FAFBFC;
+    --surface-focus:#FFFFFF;
+    --pill-bg:#EAEBED;
+    --btn-ghost-hover:#F5F6F7;
+    --topbar-bg:rgba(247,248,250,0.94);
+    --nav-bg:rgba(250,250,251,0.96);
     --font-ui:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#14171C;
+      --card:#1B1F26;
+      --border:#2B303A;
+      --border-strong:#3A414D;
+      --heading:#8FC4FF;
+      --heading-soft:#6FA8E0;
+      --blue:#3396FF;
+      --blue-dark:#1C7EE0;
+      --blue-tint:#16283C;
+      --green:#3FC469;
+      --green-tint:#123420;
+      --amber:#E2963C;
+      --amber-tint:#3A2A11;
+      --amber-tint-hover:#4A3517;
+      --red:#F0564A;
+      --red-tint:#3A1614;
+      --red-tint-hover:#4A211D;
+      --text:#EDEEF0;
+      --text-secondary:#9AA0A8;
+      --text-faint:#666C74;
+      --surface-alt:#20242C;
+      --surface-subtle:#20242C;
+      --surface-focus:#242933;
+      --pill-bg:#20242C;
+      --btn-ghost-hover:#242933;
+      --topbar-bg:rgba(20,23,28,0.85);
+      --nav-bg:rgba(20,23,28,0.92);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#14171C;
+    --card:#1B1F26;
+    --border:#2B303A;
+    --border-strong:#3A414D;
+    --heading:#8FC4FF;
+    --heading-soft:#6FA8E0;
+    --blue:#3396FF;
+    --blue-dark:#1C7EE0;
+    --blue-tint:#16283C;
+    --green:#3FC469;
+    --green-tint:#123420;
+    --amber:#E2963C;
+    --amber-tint:#3A2A11;
+    --amber-tint-hover:#4A3517;
+    --red:#F0564A;
+    --red-tint:#3A1614;
+    --red-tint-hover:#4A211D;
+    --text:#EDEEF0;
+    --text-secondary:#9AA0A8;
+    --text-faint:#666C74;
+    --surface-alt:#20242C;
+    --surface-subtle:#20242C;
+    --surface-focus:#242933;
+    --pill-bg:#20242C;
+    --btn-ghost-hover:#242933;
+    --topbar-bg:rgba(20,23,28,0.85);
+    --nav-bg:rgba(20,23,28,0.92);
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   body{
@@ -50,7 +129,7 @@
     align-items:center;
     gap:14px;
     padding:12px 16px;
-    background:rgba(247,248,250,0.94);
+    background:var(--topbar-bg);
     backdrop-filter:blur(10px);
     border-bottom:1px solid var(--border);
     flex-wrap:wrap;
@@ -62,7 +141,7 @@
     font-weight:700;
     font-size:19px;
     letter-spacing:-0.2px;
-    color:var(--navy);
+    color:var(--heading);
     display:flex;
     align-items:center;
     gap:8px;
@@ -84,16 +163,32 @@
     font-weight:600;
     padding:5px 12px;
     border-radius:20px;
-    background:#EAEBED;
+    background:var(--pill-bg);
     color:var(--text-secondary);
   }
   .status-dot{width:7px;height:7px;border-radius:50%;background:var(--text-faint);}
   .status-pill.online{background:var(--green-tint);color:var(--green);}
   .status-pill.online .status-dot{background:var(--green);}
-  .status-pill.offline{background:#EAEBED;color:var(--text-secondary);}
+  .status-pill.offline{background:var(--pill-bg);color:var(--text-secondary);}
+  .theme-toggle{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:30px;
+    height:30px;
+    border-radius:50%;
+    border:1px solid var(--border);
+    background:var(--card);
+    color:var(--text-secondary);
+    cursor:pointer;
+    font-size:14px;
+    padding:0;
+    flex-shrink:0;
+  }
+  .theme-toggle:hover{background:var(--surface-alt);}
   .zulu{
     margin-left:auto;
-    color:var(--navy-soft);
+    color:var(--heading-soft);
     font-size:13px;
     font-weight:600;
     font-variant-numeric:tabular-nums;
@@ -112,7 +207,7 @@
     font-size:26px;
     letter-spacing:-0.3px;
     margin:6px 0 3px 0;
-    color:var(--navy);
+    color:var(--heading);
   }
   .subhead{
     color:var(--text-secondary);
@@ -148,7 +243,7 @@
     margin-bottom:5px;
   }
   input,select,textarea{
-    background:#F7F8F9;
+    background:var(--surface-alt);
     border:1px solid var(--border);
     color:var(--text);
     font-family:var(--font-ui);
@@ -157,7 +252,7 @@
     border-radius:8px;
     width:100%;
   }
-  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--blue);background:#fff;box-shadow:0 0 0 3px var(--blue-tint);}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--blue);background:var(--surface-focus);box-shadow:0 0 0 3px var(--blue-tint);}
   textarea{resize:vertical;min-height:50px;}
   button.btn{
     background:var(--blue);
@@ -174,12 +269,12 @@
   button.btn:hover{background:var(--blue-dark);border-color:var(--blue-dark);}
   button.btn.primary{background:var(--blue);border-color:var(--blue);color:#fff;}
   button.btn.warn{background:var(--amber-tint);border-color:var(--amber-tint);color:var(--amber);}
-  button.btn.warn:hover{background:#F7DFC0;border-color:#F7DFC0;}
+  button.btn.warn:hover{background:var(--amber-tint-hover);border-color:var(--amber-tint-hover);}
   button.btn.danger{background:var(--red-tint);border-color:var(--red-tint);color:var(--red);}
-  button.btn.danger:hover{background:#F6D6D3;}
+  button.btn.danger:hover{background:var(--red-tint-hover);}
   button.btn.small{padding:5px 12px;font-size:13px;border-radius:7px;}
   button.btn:not(.primary):not(.warn):not(.danger){background:var(--card);border:1px solid var(--border-strong);color:var(--blue);}
-  button.btn:not(.primary):not(.warn):not(.danger):hover{background:#F5F6F7;}
+  button.btn:not(.primary):not(.warn):not(.danger):hover{background:var(--btn-ghost-hover);}
   .btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
 
   .readout{
@@ -188,12 +283,12 @@
     gap:10px;
   }
   .readout div{
-    background:#F7F8F9;
+    background:var(--surface-alt);
     border:1px solid var(--border);
     border-radius:9px;
     padding:10px 12px;
   }
-  .readout .val{font-size:19px;color:var(--navy);font-weight:700;font-variant-numeric:tabular-nums;}
+  .readout .val{font-size:19px;color:var(--heading);font-weight:700;font-variant-numeric:tabular-nums;}
   .readout .lbl{font-size:10.5px;color:var(--text-secondary);margin-top:2px;font-weight:600;}
 
   table{width:100%;border-collapse:collapse;font-size:13.5px;}
@@ -208,21 +303,21 @@
     border-bottom:1px solid var(--border);
   }
   td{padding:8px 8px;border-bottom:1px solid var(--border);color:var(--text);}
-  tr:hover td{background:#F7F8F9;}
+  tr:hover td{background:var(--surface-alt);}
   .empty{color:var(--text-faint);font-size:13px;padding:14px 0;text-align:center;}
 
   .chart-wrap svg{width:100%;height:120px;display:block;}
   .chart-wrap .bar-label{font-size:9.5px;fill:var(--text-secondary);font-family:var(--font-ui);}
-  .chart-wrap .bar-val{font-size:10.5px;fill:var(--navy);font-family:var(--font-ui);font-weight:700;}
+  .chart-wrap .bar-val{font-size:10.5px;fill:var(--heading);font-family:var(--font-ui);font-weight:700;}
 
   .metar-raw{
     font-family:var(--font-mono);
-    background:#F7F8F9;
+    background:var(--surface-alt);
     border:1px solid var(--border);
     border-radius:8px;
     padding:10px 12px;
     font-size:12.5px;
-    color:var(--navy);
+    color:var(--heading);
     word-break:break-all;
     margin-bottom:10px;
   }
@@ -255,11 +350,11 @@
     border-bottom:1px solid var(--border-strong);
     cursor:grab;
   }
-  .kb-section-head .drag-handle{color:var(--navy-soft);font-size:14px;cursor:grab;padding:0 2px;}
+  .kb-section-head .drag-handle{color:var(--heading-soft);font-size:14px;cursor:grab;padding:0 2px;}
   .kb-section-head input{
     font-weight:700;
     font-size:14.5px;
-    color:var(--navy);
+    color:var(--heading);
     border:none;
     background:none;
     padding:2px 0;
@@ -284,7 +379,7 @@
   .kb-item.checked input[type=text]{color:var(--green);text-decoration:line-through;text-decoration-color:rgba(47,168,79,0.4);}
   .kb-item .icon-btn{opacity:0.55;}
   .kb-add-item{
-    display:flex;align-items:center;gap:8px;padding:9px 12px 11px 36px;background:#FAFBFC;
+    display:flex;align-items:center;gap:8px;padding:9px 12px 11px 36px;background:var(--surface-subtle);
   }
   .icon-btn{
     background:none;border:none;color:var(--text-faint);cursor:pointer;font-size:16px;padding:2px 6px;
@@ -292,6 +387,22 @@
   .icon-btn:hover{color:var(--red);}
   .sortable-ghost{opacity:0.3;}
   .sortable-drag .kb-section-head{cursor:grabbing;}
+
+  /* ---- PDF checklist import ---- */
+  .pdf-drop{
+    border:2px dashed var(--border-strong);
+    border-radius:10px;
+    padding:22px 16px;
+    text-align:center;
+    cursor:pointer;
+    background:var(--surface-alt);
+    transition:border-color .15s, background .15s;
+  }
+  .pdf-drop:hover,.pdf-drop:focus-visible{border-color:var(--blue);outline:none;}
+  .pdf-drop.dragover{border-color:var(--blue);background:var(--blue-tint);}
+  .pdf-drop-icon{font-size:22px;color:var(--text-faint);margin-bottom:6px;}
+  .pdf-drop-text{font-size:14px;font-weight:600;color:var(--text);}
+  .pdf-drop-hint{font-size:12px;color:var(--text-secondary);margin-top:6px;line-height:1.4;}
 
   /* ---- route strip (ForeFlight-style flight plan bar) ---- */
   .route-strip{
@@ -325,7 +436,7 @@
     position:fixed;
     bottom:0;left:0;right:0;
     display:flex;
-    background:rgba(250,250,251,0.96);
+    background:var(--nav-bg);
     backdrop-filter:blur(10px);
     border-top:1px solid var(--border);
     z-index:20;
@@ -368,6 +479,7 @@
       <span id="live-status-text">Not checked</span>
     </div>
     <div class="zulu" id="zulu-clock">--:--:--Z</div>
+    <button class="theme-toggle" id="btn-theme-toggle" title="Toggle dark mode" aria-label="Toggle dark mode"><span id="theme-toggle-icon">&#9789;</span></button>
   </div>
 
   <main>
@@ -469,6 +581,17 @@
         </div>
       </div>
 
+      <div class="card no-print">
+        <div class="card-title">Import checklist from PDF</div>
+        <div class="pdf-drop" id="pdf-dropzone" tabindex="0" role="button" aria-label="Upload a checklist PDF">
+          <div class="pdf-drop-icon">&#8657;</div>
+          <div class="pdf-drop-text">Drag &amp; drop a checklist PDF here, or click to browse</div>
+          <div class="pdf-drop-hint">We pull the text out and rebuild it as sections &amp; items below. Works best on text-based (not scanned) PDFs — review the result and tidy up anything that comes through oddly.</div>
+          <input type="file" id="pdf-file-input" accept="application/pdf,.pdf" hidden>
+        </div>
+        <div class="msg" id="pdf-import-msg"></div>
+      </div>
+
       <div class="card kb-editor no-print">
         <div class="row" style="align-items:flex-end;">
           <div class="col">
@@ -538,6 +661,38 @@
     try{ window.localStorage.setItem('flightdeck:' + key, JSON.stringify(value)); }
     catch(e){ console.error('storage set failed', key, e); }
   }
+
+  /* ---------- theme ---------- */
+  function getStoredTheme(){ return getKey('theme', null); } // 'light' | 'dark' | null(=follow system)
+  function systemPrefersDark(){ return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches); }
+  function isDarkActive(){
+    const stored = getStoredTheme();
+    return stored ? stored === 'dark' : systemPrefersDark();
+  }
+  function updateThemeToggleIcon(){
+    const icon = document.getElementById('theme-toggle-icon');
+    if(!icon) return;
+    icon.innerHTML = isDarkActive() ? '&#9728;' : '&#9789;';
+  }
+  function applyTheme(theme){
+    if(theme === 'light' || theme === 'dark'){
+      document.documentElement.setAttribute('data-theme', theme);
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+    }
+    updateThemeToggleIcon();
+  }
+  document.getElementById('btn-theme-toggle').addEventListener('click', ()=>{
+    const next = isDarkActive() ? 'light' : 'dark';
+    setKey('theme', next);
+    applyTheme(next);
+  });
+  if(window.matchMedia){
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', ()=>{
+      if(!getStoredTheme()) updateThemeToggleIcon();
+    });
+  }
+  applyTheme(getStoredTheme());
 
   /* ---------- state ---------- */
   let state = {
@@ -1062,6 +1217,182 @@
       ).join('') +
       '</div>';
   }
+
+  /* ================= PDF CHECKLIST IMPORT ================= */
+  let pdfjsLoadPromise = null;
+  function loadPdfJs(){
+    if(!pdfjsLoadPromise){
+      pdfjsLoadPromise = import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.3.289/pdf.min.mjs').then(mod=>{
+        mod.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.3.289/pdf.worker.min.mjs';
+        return mod;
+      });
+    }
+    return pdfjsLoadPromise;
+  }
+
+  function toTitleCase(s){
+    return s.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  /* Reconstructs reading-order lines of text from a PDF's raw glyph runs.
+     Splits each page into two columns first (common in printed checklists)
+     when there's a wide, roughly-centered gap between glyph x-positions,
+     then groups each column's glyphs into lines by y-position. */
+  async function extractPdfLines(arrayBuffer){
+    const pdfjsLib = await loadPdfJs();
+    const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
+    const lines = [];
+    for(let p = 1; p <= pdf.numPages; p++){
+      const page = await pdf.getPage(p);
+      const viewport = page.getViewport({scale: 1});
+      const content = await page.getTextContent();
+      const items = content.items
+        .filter(it => it.str && it.str.trim())
+        .map(it => ({str: it.str, x: it.transform[4], y: it.transform[5], width: it.width || 0}));
+      if(!items.length) continue;
+
+      const xs = [...items.map(i => i.x)].sort((a, b) => a - b);
+      let split = null;
+      for(let i = 1; i < xs.length; i++){
+        const gap = xs[i] - xs[i - 1];
+        const mid = (xs[i] + xs[i - 1]) / 2;
+        if(gap > viewport.width * 0.12 && mid > viewport.width * 0.3 && mid < viewport.width * 0.7){
+          if(!split || gap > split.gap) split = {x: mid, gap};
+        }
+      }
+      const columns = split
+        ? [items.filter(i => i.x < split.x), items.filter(i => i.x >= split.x)]
+        : [items];
+
+      columns.forEach(colItems => {
+        if(!colItems.length) return;
+        const rows = new Map();
+        colItems.forEach(it => {
+          const y = Math.round(it.y);
+          let bucket = null;
+          for(const key of rows.keys()){ if(Math.abs(key - y) <= 2){ bucket = key; break; } }
+          if(bucket == null){ bucket = y; rows.set(bucket, []); }
+          rows.get(bucket).push(it);
+        });
+        [...rows.keys()].sort((a, b) => b - a).forEach(y => {
+          const rowItems = rows.get(y).sort((a, b) => a.x - b.x);
+          let text = '', prevEnd = null;
+          rowItems.forEach(it => {
+            if(prevEnd != null && it.x - prevEnd > 1.5) text += ' ';
+            text += it.str;
+            prevEnd = it.x + it.width;
+          });
+          text = text.replace(/\s+/g, ' ').trim();
+          if(text) lines.push(text);
+        });
+      });
+    }
+    return lines;
+  }
+
+  /* Best-effort heuristic: short ALL-CAPS lines become section headers,
+     everything else (with leading bullets/numbers stripped) becomes an
+     item. Works well for typical single/two-column checklists; complex
+     tables or layouts may need manual cleanup afterward. */
+  function linesToKneeboard(lines, name){
+    const skipRe = /^(page\s+\d+(\s+of\s+\d+)?|\d{1,3}|©.*|revision.*|rev\.?\s*\d.*)$/i;
+    const bulletRe = /^[☐☑☒■□○●•\-\*o]\s*/;
+    const numRe = /^\d+[\.\)]\s*/;
+    const sections = [];
+    let current = null;
+
+    lines.forEach(raw => {
+      const line = raw.trim();
+      if(!line || skipRe.test(line)) return;
+
+      const letters = line.replace(/[^A-Za-z]/g, '');
+      const isHeaderish = !bulletRe.test(line) && !numRe.test(line) &&
+        line.length <= 44 && letters.length >= 3 &&
+        letters === letters.toUpperCase();
+
+      if(isHeaderish){
+        current = {id: newId('sec'), title: toTitleCase(line), items: []};
+        sections.push(current);
+        return;
+      }
+
+      const text = line.replace(bulletRe, '').replace(numRe, '').trim();
+      if(!text) return;
+      if(!current){
+        current = {id: newId('sec'), title: 'Imported', items: []};
+        sections.push(current);
+      }
+      current.items.push({id: newId('it'), text, checked: false});
+    });
+
+    const withItems = sections.filter(s => s.items.length);
+    const finalSections = withItems.length ? withItems
+      : (sections.length ? sections : [{id: newId('sec'), title: 'Imported', items: []}]);
+
+    return {id: newId('kb'), name: name || 'Imported checklist', sections: finalSections};
+  }
+
+  const pdfDropzone = document.getElementById('pdf-dropzone');
+  const pdfFileInput = document.getElementById('pdf-file-input');
+  const pdfMsgEl = document.getElementById('pdf-import-msg');
+
+  function setPdfMsg(text, cls){
+    pdfMsgEl.textContent = text;
+    pdfMsgEl.className = 'msg' + (cls ? ' ' + cls : '');
+  }
+
+  async function handlePdfFile(file){
+    if(!file) return;
+    if(file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)){
+      setPdfMsg("That doesn't look like a PDF — pick a .pdf file.", 'error');
+      return;
+    }
+    setPdfMsg('Reading ' + file.name + '…');
+    try{
+      const buf = await file.arrayBuffer();
+      const lines = await extractPdfLines(buf);
+      if(!lines.length){
+        setPdfMsg('No selectable text found in that PDF — it may be a scanned image. Try a text-based PDF, or add items manually below.', 'error');
+        return;
+      }
+      const name = file.name.replace(/\.pdf$/i, '');
+      const kb = linesToKneeboard(lines, name);
+      state.kneeboards.push(kb);
+      state.activeKneeboardId = kb.id;
+      setKey('kneeboard-templates-v2', state.kneeboards);
+      renderKneeboard();
+      const itemCount = kb.sections.reduce((s, sec) => s + sec.items.length, 0);
+      setPdfMsg('Imported "' + kb.name + '" — ' + kb.sections.length + ' section' + (kb.sections.length === 1 ? '' : 's') +
+        ', ' + itemCount + ' item' + (itemCount === 1 ? '' : 's') + '. Review below and tidy up anything that came through oddly.', 'ok');
+    }catch(e){
+      console.error(e);
+      setPdfMsg('Could not read that PDF. It may be encrypted, corrupted, or blocked by your browser.', 'error');
+    }
+  }
+
+  pdfDropzone.addEventListener('click', () => pdfFileInput.click());
+  pdfDropzone.addEventListener('keydown', (e) => {
+    if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); pdfFileInput.click(); }
+  });
+  pdfFileInput.addEventListener('change', () => {
+    handlePdfFile(pdfFileInput.files[0]);
+    pdfFileInput.value = '';
+  });
+  ['dragenter', 'dragover'].forEach(evt => {
+    pdfDropzone.addEventListener(evt, (e) => {
+      e.preventDefault(); e.stopPropagation();
+      pdfDropzone.classList.add('dragover');
+    });
+  });
+  ['dragleave', 'drop'].forEach(evt => {
+    pdfDropzone.addEventListener(evt, (e) => {
+      e.preventDefault(); e.stopPropagation();
+      pdfDropzone.classList.remove('dragover');
+    });
+  });
+  pdfDropzone.addEventListener('drop', (e) => {
+    handlePdfFile(e.dataTransfer.files && e.dataTransfer.files[0]);
+  });
 
   /* ================= ROUTE TAB ================= */
   document.getElementById('btn-rt-load').addEventListener('click', ()=>{
